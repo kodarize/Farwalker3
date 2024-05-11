@@ -11,7 +11,7 @@ body {
 
 .page {
   max-width: 800px;
-  margin: 0 auto;
+  margin: 2rem auto 0;
   padding: 2rem;
   box-sizing: border-box;
 }
@@ -47,7 +47,7 @@ nav {
 
 nav a {
   color: #93a1a1;
-  margin-right: 1rem;
+  margin: 1vw;
   text-decoration: none;
   cursor: pointer;
 }
@@ -75,4 +75,85 @@ a {
   text-decoration: none;
   margin-right: 0.5rem;
   cursor: pointer;
+}
+
+/* CSS styles for the home page */
+.content {
+  height: calc(100vh - 8rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.blurb {
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* CSS styles for the cover letter page */
+.content2 {
+  text-align: center;
+}
+
+/* CSS styles for the projects page */
+.content3 {
+  height: calc(100vh - 8rem);
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column; /* Adjusted */
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+/* Additional CSS for dropdown */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #002b36; /* Match with nav background */
+  min-width: 160px;
+  z-index: 1;
+  padding: 0;
+  right: 0; /* Align to the right */
+}
+
+.dropdown-content a {
+  color: #93a1a1; /* Match with nav link color */
+  text-decoration: none;
+  display: block;
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+}
+
+.dropdown-content a:hover {
+  background-color: #073642; /* Darker shade for hover */
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.dropdown button {
+  background-color: #002b36; /* Match with nav background */
+  color: #93a1a1; /* Match with nav link color */
+  border: none;
+  cursor: pointer;
+  padding: 1vw;
+  text-decoration: none;
+  font-family: Arial, sans-serif;
+  font-size: 1.2rem;
+}
+
+.dropdown button:hover {
+  background-color: #073642; /* Darker shade for hover */
 }

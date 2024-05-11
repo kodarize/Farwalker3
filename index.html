@@ -7,29 +7,20 @@
   <title>Home - JCB</title>
   <link rel="icon" type="image/x-icon" href="jcb.png">
   <link rel="stylesheet" href="style.css">
-  <style>
-    /* CSS styles for the home page */
-    .content {
-      height: calc(100vh - 4rem);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .blurb {
-      max-width: 50%;
-      margin: 0 auto;
-      text-align: center;
-    }
-  </style>
 </head>
 
 <body>
   <nav>
     <a href="index.html">Home</a>
+    <a href="projects.html">Projects</a>
     <a href="cover-letter.html?q=Viewer">Cover Letter</a>
-    <a href="summary.html">Summary</a>
-    <a href="John C. Barr - 2023 Resume.pdf">Resume</a>
+    <div class="dropdown">
+      <button class="dropbtn">Resume</button>
+      <div class="dropdown-content">
+        <a href="resumepro.html">Professional Resume</a>
+        <a href="resumefun.html">Fun Resume</a>
+      </div>
+    </div>
   </nav>
   
   <div class="page">
