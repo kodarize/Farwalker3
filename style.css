@@ -215,15 +215,14 @@ ul {
 }
 
 .container {
-  padding-left: 2rem;
-  padding-right: 2rem;
+  padding-left: 5%;
+  padding-right: 5%;
 }
 
 .button {
   padding: 0.3em 0.6em;
   background: white;
   color: var(--accent);
-  font-size: 1.5vw;
   font-weight: 800;
   text-align: center;
   border-radius: 8px;
@@ -389,4 +388,24 @@ ul {
   height: calc(100% - 10rem);
   overflow-y: scroll;
   text-align: left;
+}
+
+@media only screen and (max-width: 600px) {
+  .sidemenu--mobile {
+    top: 3.5rem;
+    transform: translateX(-100%);
+  }
+  .sidemenu--cart {
+    top: 3.5rem;
+    transform: translateX(100%);
+  }
+  .sidemenu--top {
+    top: 3.5rem;
+    transform: translateY(-100%);
+  }
+  .sidemenu--bottom {
+    top: 3.5rem;
+    height: calc(100vh - 7.75rem);
+    transform: translateY(115%);
+  }
 }
