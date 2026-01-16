@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Watchlist</title>
-  <meta name="description" content="Upcoming movies I want to see, with local showtimes, recommended formats, and group voting." />
+  <meta name="description" content="Upcoming releases + local showtimes, with premium-format preference and group voting." />
   <style>
     :root{
       --bg:#0b0f17; --panel:rgba(255,255,255,.04); --panel2:rgba(15,23,42,.6);
@@ -24,6 +24,7 @@
     input,select{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;outline:none}
     button{background:rgba(96,165,250,.18);border:1px solid rgba(96,165,250,.35);color:var(--text);border-radius:10px;padding:10px 12px;cursor:pointer}
     button:hover{background:rgba(96,165,250,.26)}
+    button:disabled{opacity:.55;cursor:not-allowed}
     .status{padding:10px 12px;border:1px dashed var(--border);border-radius:12px;color:var(--muted);background:var(--panel)}
     .content{padding:16px}
     .pill{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:var(--panel)}
@@ -135,7 +136,7 @@
 
 <script>
   // ======== SET THIS to your Worker URL ========
-  // Example: https://watchlist-api.yourname.workers.dev
+  // Example: https://watchlist-api.farwalker3.workers.dev
   const WORKER_BASE = "https://watchlist-api.farwalker3.workers.dev";
 
   // Preferences
@@ -143,9 +144,10 @@
   const PREF_THEATER = { nameIncludes: "Smitty", cityIncludes: "Sanford" };
 
   // Limits
-  const DAYS_AHEAD = 14;
+  const DAYS_AHEAD = 5; // ✅ keep small to avoid rate limits
+  const SHOWTIMES_SELECTED_ONLY = true;
 
-  // Client-side anti-spam (lightweight)
+  // Voting UX
   const LOCAL_VOTE_KEY = "watchlist_voted_showtimes_v1";
 
   const $ = (id) => document.getElementById(id);
@@ -153,12 +155,16 @@
   const addDays = (d,n)=> new Date(d.getTime()+n*86400000);
   const fmtDay = (d) => d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric", year:"numeric" });
 
+  let selectedTitle = null;
+  let lastEvents = [];
+  let lastZip = "04002";
+  let refreshInFlight = false;
+
   function requireWorker() {
-    if (!WORKER_BASE || WORKER_BASE.includes("REPLACE_WITH")) throw new Error("Set WORKER_BASE to your Cloudflare Worker URL.");
+    if (!WORKER_BASE) throw new Error("WORKER_BASE not set.");
   }
 
   async function geocodeZip(zip) {
-    // ZIP geocode (no address). If you want: hardcode lat/lng here instead.
     const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=US&postalcode=${encodeURIComponent(zip)}`;
     const res = await fetch(url, { headers: { "Accept":"application/json" } });
     const data = await res.json();
@@ -166,7 +172,7 @@
     return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
   }
 
-  // --- Worker APIs ---
+  // ---- Worker API wrappers ----
   async function movieglu(path, params, geo) {
     requireWorker();
     const u = new URL(WORKER_BASE.replace(/\/+$/,"") + "/movieglu");
@@ -212,20 +218,17 @@
     return j;
   }
 
-  // --- Ranking / grouping ---
+  // ---- Ranking / grouping ----
   function isPreferredTheater(name="", city="") {
     return name.toLowerCase().includes(PREF_THEATER.nameIncludes.toLowerCase()) &&
            city.toLowerCase().includes(PREF_THEATER.cityIncludes.toLowerCase());
   }
 
   function rankScore(ev) {
-    // Higher = more “preferred”
     let s = 0;
-    if (ev.kind === "showtime") {
-      if (PREMIUM.has(String(ev.format).toUpperCase())) s += 30;
-      if (isPreferredTheater(ev.cinema_name, ev.cinema_city)) s += 60;
-      if (ev.distance != null) s += Math.max(0, 25 - ev.distance); // closer = better
-    }
+    if (PREMIUM.has(String(ev.format).toUpperCase())) s += 30;
+    if (isPreferredTheater(ev.cinema_name, ev.cinema_city)) s += 60;
+    if (ev.distance != null) s += Math.max(0, 25 - ev.distance);
     return s;
   }
 
@@ -235,25 +238,7 @@
     return "Standard";
   }
 
-  // --- Poster hall ---
-  let selectedTitle = null;
-  function setFilter(titleOrNull) {
-    selectedTitle = titleOrNull;
-    // update selection styling
-    for (const el of document.querySelectorAll(".poster")) {
-      el.classList.toggle("sel", el.dataset.title === selectedTitle);
-    }
-    renderLastResults(); // re-render if we have cached
-  }
-
-  $("clearFilter").addEventListener("click", () => setFilter(null));
-
-  function posterUrl(posterPath) {
-    // TMDB image base (simple; you can swap size)
-    return posterPath ? `https://image.tmdb.org/t/p/w342${posterPath}` : null;
-  }
-
-  // --- Voting local “already voted” memory (not secure, but good UX) ---
+  // ---- Voting local memory (UX) ----
   function getLocalVotedSet() {
     try { return new Set(JSON.parse(localStorage.getItem(LOCAL_VOTE_KEY) || "[]")); }
     catch { return new Set(); }
@@ -264,9 +249,24 @@
     localStorage.setItem(LOCAL_VOTE_KEY, JSON.stringify([...s]));
   }
 
-  // --- Data cache for re-rendering on filter change ---
-  let lastEvents = [];
-  let lastZip = "04002";
+  // ---- Poster hall ----
+  function posterUrl(posterPath) {
+    return posterPath ? `https://image.tmdb.org/t/p/w342${posterPath}` : null;
+  }
+
+  function setFilter(titleOrNull) {
+    selectedTitle = titleOrNull;
+
+    for (const el of document.querySelectorAll(".poster")) {
+      el.classList.toggle("sel", el.dataset.title === selectedTitle);
+    }
+
+    // ✅ If we only fetch showtimes for selected, trigger refresh when selection changes
+    if (SHOWTIMES_SELECTED_ONLY) refresh().catch(()=>{});
+    else renderLastResults();
+  }
+
+  $("clearFilter").addEventListener("click", () => setFilter(null));
 
   function renderLastResults() {
     const list = selectedTitle ? lastEvents.filter(e => e.title === selectedTitle) : lastEvents;
@@ -281,7 +281,6 @@
       return;
     }
 
-    // Group by Preferred/Recommended/Standard, then day
     const groups = { Preferred: [], Recommended: [], Standard: [] };
     for (const e of events) groups[e.bucket].push(e);
 
@@ -291,10 +290,8 @@
       const arr = groups[g];
       if (!arr.length) continue;
 
-      // Sort within group: chronological, then score, then distance
       arr.sort((a,b)=> a.when - b.when || (b.score - a.score) || ((a.distance??999)-(b.distance??999)));
 
-      // Day group
       const byDay = new Map();
       for (const e of arr) {
         const key = e.dayKey;
@@ -307,7 +304,11 @@
 
       const header = document.createElement("div");
       header.className = "gtitle";
-      header.innerHTML = `<h2>${g}</h2><div class="hint">${g==="Preferred" ? "Premium formats + Smitty’s Sanford prioritized" : g==="Recommended" ? "Good options nearby" : "Everything else, still upcoming"}</div>`;
+      header.innerHTML = `<h2>${g}</h2><div class="hint">${
+        g==="Preferred" ? "Premium formats + Smitty’s Sanford prioritized" :
+        g==="Recommended" ? "Good options nearby" :
+        "Everything else (still upcoming)"
+      }</div>`;
       section.appendChild(header);
 
       for (const [dayKey, dayItems] of byDay.entries()) {
@@ -348,7 +349,7 @@
                 </button>
                 ${links}
               </div>
-              <div class="meta">Click “I’m in” to help friends coordinate a time + theater.</div>
+              <div class="meta">Vote helps coordinate a time + theater.</div>
             </div>
           `;
           dayEl.appendChild(el);
@@ -380,119 +381,138 @@
     }
   }
 
-  // --- Main refresh ---
+  // ---- Main refresh ----
   async function refresh() {
-    const zip = $("zip").value.trim();
-    const radius = Number($("radius").value);
-    lastZip = zip;
-    $("status").textContent = "Loading movies, posters, and showtimes…";
+    if (refreshInFlight) return;
+    refreshInFlight = true;
 
-    const geo = await geocodeZip(zip);
+    try {
+      const zip = $("zip").value.trim();
+      const radius = Number($("radius").value);
+      lastZip = zip;
 
-    const titles = [...document.querySelectorAll("#movieTitles li")]
-      .map(li => li.getAttribute("data-title"))
-      .filter(Boolean);
+      $("status").textContent = "Loading posters…";
 
-    // 1) Posters (TMDB) for hall
-    $("hallHint").textContent = "Fetching posters…";
-    const posterData = await Promise.all(titles.map(async (t) => {
-      try { return await tmdbSearch(t); }
-      catch { return { title: t, tmdb: null }; }
-    }));
+      const geo = await geocodeZip(zip);
 
-    // Build hall UI
-    const hall = $("hall");
-    hall.innerHTML = "";
-    for (const p of posterData) {
-      const img = posterUrl(p.tmdb?.poster_path);
-      const el = document.createElement("div");
-      el.className = "poster";
-      el.dataset.title = p.title;
-      el.innerHTML = `
-        ${img ? `<img alt="${p.title}" src="${img}">` : `<div style="height:180px;display:grid;place-items:center;color:var(--muted);padding:12px;">No poster</div>`}
-        <div class="ptitle">${p.tmdb?.name || p.title}</div>
-        <div class="pmeta">${p.tmdb?.release_date || ""}</div>
-      `;
-      el.addEventListener("click", () => setFilter(p.title));
-      hall.appendChild(el);
-    }
-    $("hallHint").textContent = "Click a poster to filter.";
+      const titles = [...document.querySelectorAll("#movieTitles li")]
+        .map(li => li.getAttribute("data-title"))
+        .filter(Boolean);
 
-    // 2) Showtimes (MovieGlu) for each title
-    const now = Date.now();
-    const keysToFetchVotes = [];
-    const allEvents = [];
+      // Posters first (TMDB)
+      const posterData = await Promise.all(titles.map(async (t) => {
+        try { return await tmdbSearch(t); }
+        catch { return { title: t, tmdb: null }; }
+      }));
 
-    for (const title of titles) {
-      $("status").textContent = `Finding showtimes: ${title}`;
+      // Build hall
+      const hall = $("hall");
+      hall.innerHTML = "";
+      for (const p of posterData) {
+        const img = posterUrl(p.tmdb?.poster_path);
+        const el = document.createElement("div");
+        el.className = "poster";
+        el.dataset.title = p.title;
+        el.innerHTML = `
+          ${img ? `<img alt="${p.title}" src="${img}">` : `<div style="height:180px;display:grid;place-items:center;color:var(--muted);padding:12px;">No poster</div>`}
+          <div class="ptitle">${p.tmdb?.name || p.title}</div>
+          <div class="pmeta">${p.tmdb?.release_date || ""}</div>
+        `;
+        el.addEventListener("click", () => setFilter(p.title));
+        hall.appendChild(el);
+      }
+      $("hallHint").textContent = "Click a poster to load showtimes for that movie.";
 
-      // filmLiveSearch
-      const search = await movieglu("filmLiveSearch", { query: title }, geo).catch(()=> null);
-      const films = search?.films || [];
-      const film = films[0] || null;
-      if (!film) continue;
+      // If no selection yet, pick the first movie (nice default)
+      if (!selectedTitle && titles.length) {
+        selectedTitle = titles[0];
+      }
+      for (const el of document.querySelectorAll(".poster")) {
+        el.classList.toggle("sel", el.dataset.title === selectedTitle);
+      }
 
-      // showtimes for next DAYS_AHEAD days
-      const checks = [];
-      for (let i=0;i<DAYS_AHEAD;i++) checks.push(isoDate(addDays(new Date(), i)));
+      // Showtimes: only selected movie (avoids 429)
+      const titlesForShowtimes = (SHOWTIMES_SELECTED_ONLY && selectedTitle) ? [selectedTitle] : titles;
 
-      for (const day of checks) {
-        const st = await movieglu("filmShowTimes", { film_id: String(film.film_id), date: day }, geo).catch(()=> null);
-        const cinemas = st?.cinemas || [];
-        for (const c of cinemas) {
-          const cinemaName = c.cinema_name || "";
-          const cinemaCity = c.city || c.county || "";
-          const distance = Number(c.distance || 999);
-          if (distance > radius) continue;
+      $("status").textContent = `Loading showtimes${SHOWTIMES_SELECTED_ONLY ? " (selected movie only)" : ""}…`;
 
-          const showings = c.showings || {};
-          for (const [formatKey, payload] of Object.entries(showings)) {
-            const times = payload?.times || [];
-            for (const t of times) {
-              const when = new Date(`${day}T${t.start_time}:00`).getTime();
-              if (when <= now) continue; // hide past
+      const now = Date.now();
+      const allEvents = [];
+      const voteKeys = [];
 
-              const showtimeKey =
-                btoa(unescape(encodeURIComponent(`${title}|${day}|${t.start_time}|${cinemaName}|${formatKey}`)))
-                  .replace(/=+$/,"");
+      for (const title of titlesForShowtimes) {
+        $("status").textContent = `Searching: ${title}`;
 
-              const ev = {
-                kind: "showtime",
-                title,
-                dayKey: day,
-                start_time: t.start_time,
-                when,
-                cinema_name: cinemaName,
-                cinema_city: cinemaCity,
-                distance,
-                format: formatKey,
-                showtimeKey,
-              };
-              ev.score = rankScore(ev);
-              ev.bucket = groupName(ev.score);
+        // This is where you were getting 429 — caching + selected-only keeps this sane
+        const search = await movieglu("filmLiveSearch", { query: title }, geo);
+        const film = (search?.films || [])[0] || null;
+        if (!film) continue;
 
-              allEvents.push(ev);
-              keysToFetchVotes.push(showtimeKey);
+        // Fetch a small window
+        const days = [];
+        for (let i=0;i<DAYS_AHEAD;i++) days.push(isoDate(addDays(new Date(), i)));
+
+        for (const day of days) {
+          const st = await movieglu("filmShowTimes", { film_id: String(film.film_id), date: day }, geo);
+          const cinemas = st?.cinemas || [];
+
+          for (const c of cinemas) {
+            const cinemaName = c.cinema_name || "";
+            const cinemaCity = c.city || c.county || "";
+            const distance = Number(c.distance || 999);
+            if (distance > radius) continue;
+
+            const showings = c.showings || {};
+            for (const [formatKey, payload] of Object.entries(showings)) {
+              const times = payload?.times || [];
+              for (const t of times) {
+                const when = new Date(`${day}T${t.start_time}:00`).getTime();
+                if (when <= now) continue;
+
+                const showtimeKey =
+                  btoa(unescape(encodeURIComponent(`${title}|${day}|${t.start_time}|${cinemaName}|${formatKey}`)))
+                    .replace(/=+$/,"");
+
+                const ev = {
+                  title,
+                  dayKey: day,
+                  start_time: t.start_time,
+                  when,
+                  cinema_name: cinemaName,
+                  cinema_city: cinemaCity,
+                  distance,
+                  format: formatKey,
+                  showtimeKey,
+                };
+
+                ev.score = rankScore(ev);
+                ev.bucket = groupName(ev.score);
+
+                allEvents.push(ev);
+                voteKeys.push(showtimeKey);
+              }
             }
           }
         }
       }
+
+      $("status").textContent = "Loading votes…";
+      const votes = await getVotes(voteKeys.slice(0, 500));
+      for (const ev of allEvents) ev.votes = votes[ev.showtimeKey] || 0;
+
+      lastEvents = allEvents;
+      $("status").textContent = "Done.";
+      renderLastResults();
+
+    } catch (e) {
+      $("status").textContent = `Error: ${e.message || e}`;
+      $("results").innerHTML = "";
+    } finally {
+      refreshInFlight = false;
     }
-
-    // 3) Fetch votes in one call
-    $("status").textContent = "Loading votes…";
-    const voteMap = await getVotes(keysToFetchVotes.slice(0, 400)); // keep request sane
-    for (const ev of allEvents) ev.votes = voteMap[ev.showtimeKey] || 0;
-
-    // 4) Sort within buckets handled by renderer
-    lastEvents = allEvents;
-    $("status").textContent = "Done.";
-    renderLastResults();
   }
 
-  $("refresh").addEventListener("click", () => refresh().catch(e => {
-    $("status").textContent = `Error: ${e.message || e}`;
-  }));
+  $("refresh").addEventListener("click", () => refresh());
 </script>
 </body>
 </html>
