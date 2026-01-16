@@ -9,7 +9,7 @@
     :root{
       --bg:#0b0f17; --panel:rgba(255,255,255,.04); --panel2:rgba(15,23,42,.6);
       --text:#e5e7eb; --muted:#9ca3af; --border:rgba(255,255,255,.10);
-      --accent:#60a5fa; --good:#34d399; --warn:#fbbf24;
+      --good:#34d399;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--text)}
@@ -22,8 +22,8 @@
     .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
     label{font-size:12px;color:var(--muted)}
     input,select{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;outline:none}
-    button{background:rgba(96,165,250,.18);border:1px solid rgba(96,165,250,.35);color:var(--text);border-radius:10px;padding:10px 12px;cursor:pointer}
-    button:hover{background:rgba(96,165,250,.26)}
+    button{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:var(--text);border-radius:10px;padding:10px 12px;cursor:pointer}
+    button:hover{background:rgba(255,255,255,.10)}
     button:disabled{opacity:.55;cursor:not-allowed}
     .status{padding:10px 12px;border:1px dashed var(--border);border-radius:12px;color:var(--muted);background:var(--panel)}
     .content{padding:16px}
@@ -33,14 +33,13 @@
     .hallTop{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
     .hall{display:flex;gap:12px;overflow:auto;padding-bottom:6px;scrollbar-width:thin}
     .poster{
-      width:120px; flex:0 0 120px; border-radius:14px; overflow:hidden; border:1px solid var(--border);
-      background:rgba(255,255,255,.03); cursor:pointer;
-      transition:transform .12s ease, border-color .12s ease;
+      width:140px; flex:0 0 140px; border-radius:14px; overflow:hidden; border:1px solid var(--border);
+      background:rgba(255,255,255,.03); cursor:pointer; transition:transform .12s ease, border-color .12s ease;
     }
     .poster:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.22)}
-    .poster.sel{border-color:rgba(96,165,250,.6); box-shadow:0 0 0 1px rgba(96,165,250,.35) inset}
-    .poster img{display:block;width:100%;height:180px;object-fit:cover}
-    .poster .ptitle{padding:8px 8px 10px;font-size:12px;color:var(--text);line-height:1.2}
+    .poster.sel{border-color:rgba(52,211,153,.65); box-shadow:0 0 0 1px rgba(52,211,153,.25) inset}
+    .poster img{display:block;width:100%;height:205px;object-fit:cover}
+    .poster .ptitle{padding:8px 8px 6px;font-size:12px;color:var(--text);line-height:1.2}
     .poster .pmeta{padding:0 8px 10px;font-size:11px;color:var(--muted)}
     .groups{display:grid;gap:14px;margin-top:14px}
     .gtitle{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
@@ -56,7 +55,6 @@
     .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
     .badge{font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:var(--panel);color:var(--muted)}
     .badge.good{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.12);color:rgba(167,243,208,.95)}
-    .badge.warn{border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.12);color:rgba(253,230,138,.95)}
     .right{display:flex;flex-direction:column;gap:10px;align-items:flex-end}
     .voteRow{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
     .voteBtn{background:rgba(52,211,153,.14);border:1px solid rgba(52,211,153,.35)}
@@ -86,7 +84,7 @@
     <div class="cardhead">
       <div>
         <strong>Nearby showtimes</strong>
-        <div class="meta">Preferred/Recommended first, then chronological.</div>
+        <div class="meta">MovieGlu primary, SerpApi fallback.</div>
       </div>
       <div class="controls">
         <div>
@@ -107,7 +105,7 @@
 
     <div class="hallWrap">
       <div class="hallTop">
-        <div class="meta" id="hallHint">Loading posters…</div>
+        <div class="meta" id="hallHint">Click Refresh to load posters.</div>
         <div class="row">
           <button id="clearFilter">All movies</button>
         </div>
@@ -135,24 +133,14 @@
 </footer>
 
 <script>
-  // ======== SET THIS to your Worker URL ========
-  // Example: https://watchlist-api.farwalker3.workers.dev
   const WORKER_BASE = "https://watchlist-api.farwalker3.workers.dev";
 
-  // Preferences
   const PREMIUM = new Set(["3D","IMAX","IMAX3D","3DIMAX"]);
   const PREF_THEATER = { nameIncludes: "Smitty", cityIncludes: "Sanford" };
 
-  // Limits
-  const DAYS_AHEAD = 5; // ✅ keep small to avoid rate limits
-  const SHOWTIMES_SELECTED_ONLY = true;
-
-  // Voting UX
   const LOCAL_VOTE_KEY = "watchlist_voted_showtimes_v1";
 
   const $ = (id) => document.getElementById(id);
-  const isoDate = (d) => d.toISOString().slice(0,10);
-  const addDays = (d,n)=> new Date(d.getTime()+n*86400000);
   const fmtDay = (d) => d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric", year:"numeric" });
 
   let selectedTitle = null;
@@ -160,65 +148,10 @@
   let lastZip = "04002";
   let refreshInFlight = false;
 
-  function requireWorker() {
-    if (!WORKER_BASE) throw new Error("WORKER_BASE not set.");
+  function posterUrl(posterPath) {
+    return posterPath ? `https://image.tmdb.org/t/p/w342${posterPath}` : null;
   }
 
-  async function geocodeZip(zip) {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=US&postalcode=${encodeURIComponent(zip)}`;
-    const res = await fetch(url, { headers: { "Accept":"application/json" } });
-    const data = await res.json();
-    if (!data?.[0]) throw new Error("Could not geocode ZIP.");
-    return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
-  }
-
-  // ---- Worker API wrappers ----
-  async function movieglu(path, params, geo) {
-    requireWorker();
-    const u = new URL(WORKER_BASE.replace(/\/+$/,"") + "/movieglu");
-    u.searchParams.set("path", path);
-    for (const [k,v] of Object.entries(params||{})) u.searchParams.set(k, v);
-    if (geo){ u.searchParams.set("lat", String(geo.lat)); u.searchParams.set("lng", String(geo.lng)); }
-    const r = await fetch(u.toString(), { headers: { "Accept":"application/json" } });
-    const j = await r.json().catch(()=> ({}));
-    if (!r.ok) throw new Error(j?.error || `MovieGlu error ${r.status}`);
-    return j;
-  }
-
-  async function tmdbSearch(title) {
-    requireWorker();
-    const u = new URL(WORKER_BASE.replace(/\/+$/,"") + "/tmdb/search");
-    u.searchParams.set("title", title);
-    const r = await fetch(u.toString(), { headers: { "Accept":"application/json" } });
-    const j = await r.json().catch(()=> ({}));
-    if (!r.ok) throw new Error(j?.error || `TMDB error ${r.status}`);
-    return j;
-  }
-
-  async function getVotes(keys) {
-    requireWorker();
-    if (!keys.length) return {};
-    const u = new URL(WORKER_BASE.replace(/\/+$/,"") + "/votes");
-    u.searchParams.set("keys", keys.join(","));
-    const r = await fetch(u.toString(), { headers: { "Accept":"application/json" } });
-    const j = await r.json().catch(()=> ({}));
-    return j?.votes || {};
-  }
-
-  async function vote(showtimeKey, expiresAtEpochMs) {
-    requireWorker();
-    const u = WORKER_BASE.replace(/\/+$/,"") + "/vote";
-    const r = await fetch(u, {
-      method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ showtimeKey, expiresAtEpochMs })
-    });
-    const j = await r.json().catch(()=> ({}));
-    if (!r.ok) throw new Error(j?.error || `Vote error ${r.status}`);
-    return j;
-  }
-
-  // ---- Ranking / grouping ----
   function isPreferredTheater(name="", city="") {
     return name.toLowerCase().includes(PREF_THEATER.nameIncludes.toLowerCase()) &&
            city.toLowerCase().includes(PREF_THEATER.cityIncludes.toLowerCase());
@@ -238,7 +171,6 @@
     return "Standard";
   }
 
-  // ---- Voting local memory (UX) ----
   function getLocalVotedSet() {
     try { return new Set(JSON.parse(localStorage.getItem(LOCAL_VOTE_KEY) || "[]")); }
     catch { return new Set(); }
@@ -249,35 +181,240 @@
     localStorage.setItem(LOCAL_VOTE_KEY, JSON.stringify([...s]));
   }
 
-  // ---- Poster hall ----
-  function posterUrl(posterPath) {
-    return posterPath ? `https://image.tmdb.org/t/p/w342${posterPath}` : null;
+  async function geocodeZip(zip) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=US&postalcode=${encodeURIComponent(zip)}`;
+    const res = await fetch(url, { headers: { "Accept":"application/json" } });
+    const data = await res.json();
+    if (!data?.[0]) throw new Error("Could not geocode ZIP.");
+    return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
   }
 
-  function setFilter(titleOrNull) {
+  async function tmdbSearch(title) {
+    const u = new URL(WORKER_BASE.replace(/\/+$/,"") + "/tmdb/search");
+    u.searchParams.set("title", title);
+    const r = await fetch(u.toString(), { headers: { "Accept":"application/json" } });
+    const j = await r.json().catch(()=> ({}));
+    if (!r.ok) throw new Error(j?.error || `TMDB error ${r.status}`);
+    return j;
+  }
+
+  async function getVotes(keys) {
+    if (!keys.length) return {};
+    const u = new URL(WORKER_BASE.replace(/\/+$/,"") + "/votes");
+    u.searchParams.set("keys", keys.join(","));
+    const r = await fetch(u.toString(), { headers: { "Accept":"application/json" } });
+    const j = await r.json().catch(()=> ({}));
+    return j?.votes || {};
+  }
+
+  async function vote(showtimeKey, expiresAtEpochMs) {
+    const u = WORKER_BASE.replace(/\/+$/,"") + "/vote";
+    const r = await fetch(u, {
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({ showtimeKey, expiresAtEpochMs })
+    });
+    const j = await r.json().catch(()=> ({}));
+    if (!r.ok) throw new Error(j?.error || `Vote error ${r.status}`);
+    return j;
+  }
+
+  // ---- UI wiring ----
+  $("clearFilter").addEventListener("click", () => setFilter(null));
+  $("refresh").addEventListener("click", () => refresh());
+
+  async function setFilter(titleOrNull) {
     selectedTitle = titleOrNull;
 
     for (const el of document.querySelectorAll(".poster")) {
       el.classList.toggle("sel", el.dataset.title === selectedTitle);
     }
 
-    // ✅ If we only fetch showtimes for selected, trigger refresh when selection changes
-    if (SHOWTIMES_SELECTED_ONLY) refresh().catch(()=>{});
-    else renderLastResults();
+    if (!selectedTitle) {
+      lastEvents = [];
+      renderResults();
+      $("status").textContent = "Select a poster to load showtimes.";
+      return;
+    }
+
+    await loadShowtimesForSelected().catch(e => {
+      $("status").textContent = `Error: ${e.message || e}`;
+      lastEvents = [];
+      renderResults();
+    });
   }
 
-  $("clearFilter").addEventListener("click", () => setFilter(null));
+  async function refresh() {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
 
-  function renderLastResults() {
-    const list = selectedTitle ? lastEvents.filter(e => e.title === selectedTitle) : lastEvents;
-    renderGrouped(list, lastZip);
+    try {
+      const zip = $("zip").value.trim();
+      lastZip = zip;
+
+      $("status").textContent = "Loading posters…";
+
+      const titles = [...document.querySelectorAll("#movieTitles li")]
+        .map(li => li.getAttribute("data-title"))
+        .filter(Boolean);
+
+      const posterData = await Promise.all(titles.map(async (t) => {
+        try { return await tmdbSearch(t); }
+        catch { return { title: t, tmdb: null }; }
+      }));
+
+      const hall = $("hall");
+      hall.innerHTML = "";
+      for (const p of posterData) {
+        const img = posterUrl(p.tmdb?.poster_path);
+        const el = document.createElement("div");
+        el.className = "poster";
+        el.dataset.title = p.title;
+        el.innerHTML = `
+          ${img ? `<img alt="${p.title}" src="${img}">` : `<div style="height:205px;display:grid;place-items:center;color:var(--muted);padding:12px;">No poster</div>`}
+          <div class="ptitle">${p.tmdb?.name || p.title}</div>
+          <div class="pmeta">${p.tmdb?.release_date || ""}</div>
+        `;
+        el.addEventListener("click", () => setFilter(p.title));
+        hall.appendChild(el);
+      }
+
+      $("hallHint").textContent = "Click a poster to load showtimes (MovieGlu → SerpApi fallback).";
+      $("status").textContent = "Posters loaded. Click a poster to load showtimes.";
+      lastEvents = [];
+      renderResults();
+
+    } finally {
+      refreshInFlight = false;
+    }
   }
 
-  function renderGrouped(events, zip) {
+  async function loadShowtimesForSelected() {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
+
+    try {
+      const zip = $("zip").value.trim();
+      const radius = Number($("radius").value);
+      lastZip = zip;
+
+      $("status").textContent = `Loading showtimes for: ${selectedTitle}`;
+
+      const geo = await geocodeZip(zip);
+
+      const u = new URL(WORKER_BASE.replace(/\/+$/,"") + "/showtimes");
+      u.searchParams.set("title", selectedTitle);
+      u.searchParams.set("zip", zip);
+      u.searchParams.set("radius", String(radius));
+      u.searchParams.set("lat", String(geo.lat));
+      u.searchParams.set("lng", String(geo.lng));
+
+      const r = await fetch(u.toString(), { headers: { "Accept":"application/json" } });
+      const j = await r.json().catch(()=> ({}));
+      if (!r.ok) throw new Error(j?.error || `Showtimes error ${r.status}`);
+
+      // Normalize to our UI event list
+      if (j.provider === "movieglu" && Array.isArray(j.items)) {
+        lastEvents = normalizeItemsToEvents(j.items);
+        $("status").textContent = `Loaded from MovieGlu (${lastEvents.length} showtimes).`;
+      } else if (j.provider === "serpapi") {
+        // SerpApi fallback: may not have parsed items yet
+        lastEvents = normalizeItemsToEvents(j.items || []);
+        $("status").textContent = lastEvents.length
+          ? `Loaded fallback from SerpApi (${lastEvents.length} showtimes).`
+          : `Fallback: SerpApi returned limited structured showtime data.`;
+        // If no items, show a fallback “links card” in the results area
+        if (!lastEvents.length) {
+          renderFallbackCard(j);
+          return;
+        }
+      } else {
+        lastEvents = [];
+        renderFallbackCard(j);
+        return;
+      }
+
+      // Votes
+      const keys = lastEvents.map(e => e.showtimeKey);
+      const voteMap = await getVotes(keys.slice(0, 500));
+      for (const ev of lastEvents) ev.votes = voteMap[ev.showtimeKey] || 0;
+
+      renderResults();
+
+    } finally {
+      refreshInFlight = false;
+    }
+  }
+
+  function normalizeItemsToEvents(items) {
+    const now = Date.now();
+    const events = [];
+
+    for (const it of items) {
+      const when = Number(it.when_epoch_ms || 0);
+      if (!when || when <= now) continue;
+
+      const ev = {
+        title: it.title || selectedTitle,
+        dayKey: (it.date || new Date(when).toISOString().slice(0,10)),
+        start_time: it.start_time || new Date(when).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}),
+        when,
+        cinema_name: it.theater_name || it.theatre_name || "Theater",
+        cinema_city: it.theater_city || it.theatre_city || "",
+        distance: (it.distance_miles != null ? Number(it.distance_miles) : null),
+        format: it.format || "Standard",
+        showtimeKey: it.showtimeKey,
+        booking_url: it.booking_url || null,
+        votes: 0
+      };
+
+      ev.score = rankScore(ev);
+      ev.bucket = groupName(ev.score);
+      events.push(ev);
+    }
+
+    return events;
+  }
+
+  function renderFallbackCard(payload) {
+    const root = $("results");
+    root.innerHTML = `
+      <div class="event" style="grid-template-columns:1fr;">
+        <div>
+          <h3>${payload.title || selectedTitle}</h3>
+          <div class="meta">
+            Provider used: <strong>${payload.provider || "unknown"}</strong><br/>
+            ${payload.note ? payload.note + "<br/>" : ""}
+            ${payload.message ? payload.message + "<br/>" : ""}
+          </div>
+          <div class="badges" style="margin-top:12px;">
+            <span class="badge">ZIP: ${$("zip").value.trim()}</span>
+            <span class="badge">Radius: ${$("radius").value} mi</span>
+            <span class="badge good">Fallback active</span>
+          </div>
+          <div class="voteRow" style="justify-content:flex-start;margin-top:14px;">
+            ${payload.links?.google ? `<a class="link" target="_blank" rel="noreferrer" href="${payload.links.google}">Google showtimes</a>` : ""}
+            ${payload.links?.fandango ? `<a class="link" target="_blank" rel="noreferrer" href="${payload.links.fandango}">Fandango search</a>` : ""}
+          </div>
+          <div class="meta" style="margin-top:10px;">
+            If MovieGlu is rate-limiting, this fallback keeps the page useful without breaking the UX.
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderResults() {
     const root = $("results");
     root.innerHTML = "";
+
+    const events = selectedTitle ? lastEvents.filter(e => e.title === selectedTitle) : lastEvents;
+    if (!selectedTitle) {
+      root.innerHTML = `<div class="status">Select a poster to load showtimes.</div>`;
+      return;
+    }
     if (!events.length) {
-      root.innerHTML = `<div class="status">No upcoming showtimes found (or everything is filtered out).</div>`;
+      root.innerHTML = `<div class="status">No upcoming showtimes found (or providers returned limited data).</div>`;
       return;
     }
 
@@ -285,7 +422,6 @@
     for (const e of events) groups[e.bucket].push(e);
 
     const order = ["Preferred","Recommended","Standard"];
-
     for (const g of order) {
       const arr = groups[g];
       if (!arr.length) continue;
@@ -294,9 +430,8 @@
 
       const byDay = new Map();
       for (const e of arr) {
-        const key = e.dayKey;
-        if (!byDay.has(key)) byDay.set(key, []);
-        byDay.get(key).push(e);
+        if (!byDay.has(e.dayKey)) byDay.set(e.dayKey, []);
+        byDay.get(e.dayKey).push(e);
       }
 
       const section = document.createElement("div");
@@ -319,6 +454,7 @@
         for (const ev of dayItems) {
           const premium = PREMIUM.has(String(ev.format).toUpperCase());
           const preferred = isPreferredTheater(ev.cinema_name, ev.cinema_city);
+          const voted = getLocalVotedSet().has(ev.showtimeKey);
 
           const badges = [
             premium ? `<span class="badge good">${ev.format}</span>` : `<span class="badge">${ev.format}</span>`,
@@ -327,12 +463,10 @@
             `<span class="badge">Votes: <span id="v-${ev.showtimeKey}">${ev.votes ?? 0}</span></span>`
           ].filter(Boolean).join("");
 
-          const voted = getLocalVotedSet().has(ev.showtimeKey);
-
           const links = [
-            { label:"Search", href:`https://www.google.com/search?q=${encodeURIComponent(ev.title + " showtimes " + zip)}` },
-            { label:"Fandango", href:`https://www.fandango.com/${encodeURIComponent(zip)}_movietimes?search=${encodeURIComponent(ev.title)}` }
-          ].map(l => `<a class="link" target="_blank" rel="noreferrer" href="${l.href}">${l.label}</a>`).join("");
+            ev.booking_url ? { label:"Tickets", href: ev.booking_url } : null,
+            { label:"Search", href:`https://www.google.com/search?q=${encodeURIComponent(ev.title + " showtimes " + lastZip)}` }
+          ].filter(Boolean).map(l => `<a class="link" target="_blank" rel="noreferrer" href="${l.href}">${l.label}</a>`).join("");
 
           const el = document.createElement("div");
           el.className = "event";
@@ -354,13 +488,13 @@
           `;
           dayEl.appendChild(el);
         }
+
         section.appendChild(dayEl);
       }
 
       root.appendChild(section);
     }
 
-    // Wire vote buttons
     for (const b of root.querySelectorAll("button[data-vote]")) {
       b.addEventListener("click", async () => {
         const key = b.getAttribute("data-vote");
@@ -380,139 +514,6 @@
       });
     }
   }
-
-  // ---- Main refresh ----
-  async function refresh() {
-    if (refreshInFlight) return;
-    refreshInFlight = true;
-
-    try {
-      const zip = $("zip").value.trim();
-      const radius = Number($("radius").value);
-      lastZip = zip;
-
-      $("status").textContent = "Loading posters…";
-
-      const geo = await geocodeZip(zip);
-
-      const titles = [...document.querySelectorAll("#movieTitles li")]
-        .map(li => li.getAttribute("data-title"))
-        .filter(Boolean);
-
-      // Posters first (TMDB)
-      const posterData = await Promise.all(titles.map(async (t) => {
-        try { return await tmdbSearch(t); }
-        catch { return { title: t, tmdb: null }; }
-      }));
-
-      // Build hall
-      const hall = $("hall");
-      hall.innerHTML = "";
-      for (const p of posterData) {
-        const img = posterUrl(p.tmdb?.poster_path);
-        const el = document.createElement("div");
-        el.className = "poster";
-        el.dataset.title = p.title;
-        el.innerHTML = `
-          ${img ? `<img alt="${p.title}" src="${img}">` : `<div style="height:180px;display:grid;place-items:center;color:var(--muted);padding:12px;">No poster</div>`}
-          <div class="ptitle">${p.tmdb?.name || p.title}</div>
-          <div class="pmeta">${p.tmdb?.release_date || ""}</div>
-        `;
-        el.addEventListener("click", () => setFilter(p.title));
-        hall.appendChild(el);
-      }
-      $("hallHint").textContent = "Click a poster to load showtimes for that movie.";
-
-      // If no selection yet, pick the first movie (nice default)
-      if (!selectedTitle && titles.length) {
-        selectedTitle = titles[0];
-      }
-      for (const el of document.querySelectorAll(".poster")) {
-        el.classList.toggle("sel", el.dataset.title === selectedTitle);
-      }
-
-      // Showtimes: only selected movie (avoids 429)
-      const titlesForShowtimes = (SHOWTIMES_SELECTED_ONLY && selectedTitle) ? [selectedTitle] : titles;
-
-      $("status").textContent = `Loading showtimes${SHOWTIMES_SELECTED_ONLY ? " (selected movie only)" : ""}…`;
-
-      const now = Date.now();
-      const allEvents = [];
-      const voteKeys = [];
-
-      for (const title of titlesForShowtimes) {
-        $("status").textContent = `Searching: ${title}`;
-
-        // This is where you were getting 429 — caching + selected-only keeps this sane
-        const search = await movieglu("filmLiveSearch", { query: title }, geo);
-        const film = (search?.films || [])[0] || null;
-        if (!film) continue;
-
-        // Fetch a small window
-        const days = [];
-        for (let i=0;i<DAYS_AHEAD;i++) days.push(isoDate(addDays(new Date(), i)));
-
-        for (const day of days) {
-          const st = await movieglu("filmShowTimes", { film_id: String(film.film_id), date: day }, geo);
-          const cinemas = st?.cinemas || [];
-
-          for (const c of cinemas) {
-            const cinemaName = c.cinema_name || "";
-            const cinemaCity = c.city || c.county || "";
-            const distance = Number(c.distance || 999);
-            if (distance > radius) continue;
-
-            const showings = c.showings || {};
-            for (const [formatKey, payload] of Object.entries(showings)) {
-              const times = payload?.times || [];
-              for (const t of times) {
-                const when = new Date(`${day}T${t.start_time}:00`).getTime();
-                if (when <= now) continue;
-
-                const showtimeKey =
-                  btoa(unescape(encodeURIComponent(`${title}|${day}|${t.start_time}|${cinemaName}|${formatKey}`)))
-                    .replace(/=+$/,"");
-
-                const ev = {
-                  title,
-                  dayKey: day,
-                  start_time: t.start_time,
-                  when,
-                  cinema_name: cinemaName,
-                  cinema_city: cinemaCity,
-                  distance,
-                  format: formatKey,
-                  showtimeKey,
-                };
-
-                ev.score = rankScore(ev);
-                ev.bucket = groupName(ev.score);
-
-                allEvents.push(ev);
-                voteKeys.push(showtimeKey);
-              }
-            }
-          }
-        }
-      }
-
-      $("status").textContent = "Loading votes…";
-      const votes = await getVotes(voteKeys.slice(0, 500));
-      for (const ev of allEvents) ev.votes = votes[ev.showtimeKey] || 0;
-
-      lastEvents = allEvents;
-      $("status").textContent = "Done.";
-      renderLastResults();
-
-    } catch (e) {
-      $("status").textContent = `Error: ${e.message || e}`;
-      $("results").innerHTML = "";
-    } finally {
-      refreshInFlight = false;
-    }
-  }
-
-  $("refresh").addEventListener("click", () => refresh());
 </script>
 </body>
 </html>
