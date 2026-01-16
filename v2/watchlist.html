@@ -1,10 +1,317 @@
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="UTF-8">
-		<title></title>
-	</head>
-	<body>
-		
-	</body>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Watchlist | Storytelling</title>
+  <meta name="description" content="My upcoming theater watchlist with local showtimes, premium formats, and preferred theaters." />
+  <style>
+    :root{--bg:#0b0f17;--text:#e5e7eb;--muted:#9ca3af;--border:rgba(255,255,255,.08);--panel:rgba(255,255,255,.03);--accent:#60a5fa}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--text)}
+    header,main,footer{max-width:1100px;margin:0 auto;padding:0 20px}
+    header{padding:48px 0 20px;display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;align-items:flex-end}
+    h1{margin:0;font-size:34px}
+    .sub{color:var(--muted);margin-top:8px;line-height:1.4}
+    .card{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02))}
+    .cardhead{padding:16px;border-bottom:1px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+    label{font-size:12px;color:var(--muted)}
+    input,select{background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;outline:none}
+    button{background:rgba(96,165,250,.18);border:1px solid rgba(96,165,250,.35);color:var(--text);border-radius:10px;padding:10px 12px;cursor:pointer}
+    button:hover{background:rgba(96,165,250,.26)}
+    .content{padding:16px}
+    .status{padding:10px 12px;border:1px dashed var(--border);border-radius:12px;color:var(--muted);background:var(--panel)}
+    .daytitle{margin:18px 0 10px;color:var(--muted);font-size:13px}
+    .event{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:rgba(15,23,42,.55);margin-bottom:10px}
+    .event h3{margin:0 0 6px;font-size:16px}
+    .meta{color:var(--muted);font-size:12px;line-height:1.35}
+    .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .badge{font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:var(--panel);color:var(--muted)}
+    .badge.good{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.12);color:rgba(167,243,208,.95)}
+    .links{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+    .link{font-size:12px;color:var(--text);text-decoration:none;border:1px solid var(--border);padding:8px 10px;border-radius:10px;background:var(--panel)}
+    footer{padding:18px 20px 60px;color:var(--muted);font-size:12px;line-height:1.5}
+    @media (max-width:860px){.event{grid-template-columns:1fr}.links{justify-content:flex-start}}
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Watchlist</h1>
+    <div class="sub">Upcoming theater releases I’m excited about — with local showtimes when available.</div>
+    <div class="sub">Preferences: <span style="color:var(--accent)">3D / IMAX / premium formats</span> • Preferred: <span style="color:var(--accent)">Smitty’s (Sanford)</span></div>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="cardhead">
+      <div>
+        <strong>Calendar view</strong>
+        <div class="meta">Sorted by next showtime (or theatrical release date if schedules aren’t posted yet).</div>
+      </div>
+      <div class="controls">
+        <div>
+          <label for="zip">ZIP</label><br/>
+          <input id="zip" value="04002" />
+        </div>
+        <div>
+          <label for="radius">Max distance</label><br/>
+          <select id="radius">
+            <option value="25">25 miles</option>
+            <option value="40" selected>40 miles</option>
+            <option value="60">60 miles</option>
+          </select>
+        </div>
+        <button id="refresh">Refresh</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="status" id="status">Ready. Click “Refresh”.</div>
+      <div id="results"></div>
+
+      <div class="meta" style="margin-top:12px;">
+        Maintenance is just editing titles below:
+      </div>
+
+      <!-- ✅ EDIT ONLY THIS LIST -->
+      <ol id="movieTitles" style="margin-top:10px;color:var(--muted);">
+        <li data-title="THE SPONGEBOB MOVIE: SEARCH FOR SQUAREPANTS"></li>
+        <li data-title="ZOOTOPIA 2"></li>
+        <li data-title="MERCY"></li>
+        <li data-title="IRON LUNG"></li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Showtimes require a server-side proxy so API keys aren’t exposed on GitHub Pages. This guide uses a free Cloudflare Worker for that.
+</footer>
+
+<script>
+  // ======== SET THIS IN STEP 4 ========
+  // Example: "https://your-worker-name.your-subdomain.workers.dev"
+  const API_BASE = "REPLACE_WITH_YOUR_CLOUDFLARE_WORKER_URL";
+
+  const PREFERRED_THEATER_HINTS = [{ nameIncludes: "Smitty", cityIncludes: "Sanford", weight: 50 }];
+  const PREMIUM_FORMATS = new Set(["3D","IMAX","IMAX3D","3DIMAX"]);
+  const DAYS_AHEAD_TO_CHECK = 14;
+
+  const $ = (id) => document.getElementById(id);
+  const fmtDate = (d) => d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric", year:"numeric" });
+  const isoDate = (d) => d.toISOString().slice(0,10);
+  const addDays = (d, n) => new Date(d.getTime() + n*86400000);
+
+  function scoreCinema(name="", city="", format="") {
+    let score = 0;
+    for (const rule of PREFERRED_THEATER_HINTS) {
+      if (name.toLowerCase().includes(rule.nameIncludes.toLowerCase()) &&
+          city.toLowerCase().includes(rule.cityIncludes.toLowerCase())) score += rule.weight;
+    }
+    if (PREMIUM_FORMATS.has(String(format).toUpperCase())) score += 15;
+    return score;
+  }
+
+  function ticketLinks(title, zip) {
+    const q = encodeURIComponent(`${title} showtimes ${zip}`);
+    return [
+      { label: "Search showtimes", href: `https://www.google.com/search?q=${q}` },
+      { label: "Fandango", href: `https://www.fandango.com/${encodeURIComponent(zip)}_movietimes?search=${encodeURIComponent(title)}` },
+    ];
+  }
+
+  async function geocodeZip(zip) {
+    // Free geocoding via OpenStreetMap Nominatim. (No address needed; uses ZIP.)
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=US&postalcode=${encodeURIComponent(zip)}`;
+    const res = await fetch(url, { headers: { "Accept":"application/json" } });
+    const data = await res.json();
+    if (!data?.[0]) throw new Error("Could not geocode ZIP. Try a nearby ZIP.");
+    return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
+  }
+
+  async function api(path, params, geo) {
+    if (!API_BASE || API_BASE.includes("REPLACE_WITH")) throw new Error("Set API_BASE to your Worker URL (Step 4).");
+    const u = new URL(API_BASE);
+    u.searchParams.set("path", path);
+    Object.entries(params || {}).forEach(([k,v]) => u.searchParams.set(k, v));
+    if (geo) { u.searchParams.set("lat", String(geo.lat)); u.searchParams.set("lng", String(geo.lng)); }
+    const res = await fetch(u.toString(), { headers: { "Accept":"application/json" } });
+    const json = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error(json?.error || `API error (${res.status})`);
+    return json;
+  }
+
+  async function findBestFilmMatch(title, geo) {
+    const out = await api("filmLiveSearch", { query: title }, geo);
+    const films = out?.films || [];
+    if (!films.length) return null;
+
+    const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+    const t = norm(title);
+
+    films.sort((a,b)=>{
+      const aExact = norm(a.film_name) === t ? 1 : 0;
+      const bExact = norm(b.film_name) === t ? 1 : 0;
+      if (aExact !== bExact) return bExact - aExact;
+      const aTimes = Number(a.timescount||0), bTimes = Number(b.timescount||0);
+      if (aTimes !== bTimes) return bTimes - aTimes;
+      const aDate = (a.release_dates?.[0]?.release_date || "9999-12-31");
+      const bDate = (b.release_dates?.[0]?.release_date || "9999-12-31");
+      return aDate.localeCompare(bDate);
+    });
+
+    return films[0];
+  }
+
+  async function getShowtimesForFilm(filmId, geo) {
+    const now = new Date();
+    const checks = [];
+    for (let i=0;i<DAYS_AHEAD_TO_CHECK;i++) checks.push(isoDate(addDays(now, i)));
+
+    const all = [];
+    for (const day of checks){
+      const out = await api("filmShowTimes", { film_id: String(filmId), date: day }, geo);
+      const cinemas = out?.cinemas || [];
+      for (const c of cinemas){
+        const cinemaName = c.cinema_name || "";
+        const cinemaCity = c.city || c.county || "";
+        const distance = Number(c.distance || 999);
+        const showings = c.showings || {};
+        for (const [formatKey, payload] of Object.entries(showings)){
+          const times = payload?.times || [];
+          for (const t of times){
+            all.push({
+              date: day,
+              start_time: t.start_time,
+              cinema_name: cinemaName,
+              cinema_city: cinemaCity,
+              distance,
+              format: formatKey,
+              score: scoreCinema(cinemaName, cinemaCity, formatKey),
+            });
+          }
+        }
+      }
+    }
+    return all;
+  }
+
+  function renderCalendar(items, zip) {
+    const results = $("results");
+    results.innerHTML = "";
+    if (!items.length) {
+      results.innerHTML = `<div class="status">No upcoming entries found.</div>`;
+      return;
+    }
+
+    const byDay = new Map();
+    for (const it of items){
+      if (!byDay.has(it.dayKey)) byDay.set(it.dayKey, []);
+      byDay.get(it.dayKey).push(it);
+    }
+
+    for (const [dayKey, dayItems] of byDay.entries()){
+      const d = new Date(dayKey + "T00:00:00");
+      const wrap = document.createElement("div");
+      wrap.innerHTML = `<div class="daytitle">${fmtDate(d)}</div>`;
+
+      dayItems.sort((a,b)=>{
+        if (a.when !== b.when) return a.when - b.when;
+        if (a.score !== b.score) return b.score - a.score;
+        return (a.distance ?? 999) - (b.distance ?? 999);
+      });
+
+      for (const ev of dayItems){
+        const el = document.createElement("div");
+        el.className = "event";
+
+        const premium = PREMIUM_FORMATS.has(String(ev.format).toUpperCase());
+        const isPreferred = (ev.cinema_name || "").toLowerCase().includes("smitty") &&
+                            (ev.cinema_city || "").toLowerCase().includes("sanford");
+
+        const badges = [
+          premium ? `<span class="badge good">${ev.format}</span>` : `<span class="badge">${ev.format}</span>`,
+          isPreferred ? `<span class="badge good">Preferred theater</span>` : ``,
+          ev.distance != null ? `<span class="badge">${ev.distance.toFixed(1)} mi</span>` : ``,
+          ev.kind === "release" ? `<span class="badge">Release date</span>` : ``,
+        ].filter(Boolean).join("");
+
+        const links = ticketLinks(ev.title, zip).map(l => `<a class="link" target="_blank" rel="noreferrer" href="${l.href}">${l.label}</a>`).join("");
+
+        el.innerHTML = `
+          <div>
+            <h3>${ev.title}</h3>
+            <div class="meta">
+              ${ev.kind === "showtime"
+                ? `<strong>${ev.start_time}</strong> • ${ev.cinema_name}${ev.cinema_city ? ` — ${ev.cinema_city}` : ""}`
+                : `<strong>In theaters</strong> • ${ev.releaseDate || "Unknown"}`
+              }
+            </div>
+            <div class="badges">${badges}</div>
+          </div>
+          <div class="links">${links}</div>
+        `;
+
+        wrap.appendChild(el);
+      }
+
+      $("results").appendChild(wrap);
+    }
+  }
+
+  async function refresh() {
+    const zip = $("zip").value.trim();
+    const radius = Number($("radius").value);
+    $("status").textContent = "Loading…";
+
+    const geo = await geocodeZip(zip);
+    const titles = [...document.querySelectorAll("#movieTitles li")]
+      .map(li => li.getAttribute("data-title"))
+      .filter(Boolean);
+
+    const events = [];
+    for (const title of titles) {
+      $("status").textContent = `Looking up: ${title}`;
+      const film = await findBestFilmMatch(title, geo);
+
+      if (!film) {
+        // Fallback: keep it visible even if provider doesn’t recognize it yet.
+        const dayKey = isoDate(addDays(new Date(), 365));
+        events.push({ kind:"release", title, dayKey, when: new Date(`${dayKey}T12:00:00`).getTime(), releaseDate:"Unknown", format:"Standard", distance:null, score:0 });
+        continue;
+      }
+
+      const release = film.release_dates?.[0]?.release_date || "Unknown";
+
+      let showtimes = [];
+      try { showtimes = await getShowtimesForFilm(film.film_id, geo); } catch { showtimes = []; }
+
+      showtimes = showtimes.filter(s => Number(s.distance || 999) <= radius);
+
+      if (showtimes.length) {
+        for (const s of showtimes) {
+          const when = new Date(`${s.date}T${s.start_time}:00`).getTime();
+          events.push({
+            kind:"showtime", title, dayKey:s.date, when,
+            start_time:s.start_time, cinema_name:s.cinema_name, cinema_city:s.cinema_city,
+            distance:s.distance, format:s.format, score:s.score, releaseDate:release
+          });
+        }
+      } else {
+        const dayKey = release !== "Unknown" ? release : isoDate(addDays(new Date(), 365));
+        events.push({ kind:"release", title, dayKey, when: new Date(`${dayKey}T12:00:00`).getTime(), releaseDate:release, format:"Standard", distance:null, score:0 });
+      }
+    }
+
+    events.sort((a,b)=> a.when - b.when || (b.score||0) - (a.score||0));
+    $("status").textContent = "Done.";
+    renderCalendar(events, zip);
+  }
+
+  $("refresh").addEventListener("click", refresh);
+</script>
+</body>
 </html>
