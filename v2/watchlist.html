@@ -1,10 +1,449 @@
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="UTF-8">
-		<title></title>
-	</head>
-	<body>
-		
-	</body>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Watchlist | Storytelling Interests</title>
+  <meta name="description" content="My upcoming theater watchlist with local showtimes, premium formats, and preferred theaters." />
+
+  <style>
+    :root{
+      --bg:#0b0f17; --panel:#111827; --panel2:#0f172a; --text:#e5e7eb; --muted:#9ca3af;
+      --border:rgba(255,255,255,.08); --accent:#60a5fa; --good:#34d399; --warn:#fbbf24;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(96,165,250,.15), transparent 60%),
+                  radial-gradient(900px 500px at 90% 10%, rgba(52,211,153,.12), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+    }
+    header{
+      max-width:1100px; margin:48px auto 24px; padding:0 20px;
+      display:flex; gap:16px; align-items:flex-end; justify-content:space-between; flex-wrap:wrap;
+    }
+    h1{margin:0; font-size:34px; letter-spacing:.2px}
+    .sub{color:var(--muted); margin-top:8px; line-height:1.4}
+    .pillrow{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px}
+    .pill{
+      font-size:12px; color:var(--muted); border:1px solid var(--border);
+      padding:6px 10px; border-radius:999px; background:rgba(255,255,255,.03);
+    }
+    main{max-width:1100px; margin:0 auto 60px; padding:0 20px; display:grid; gap:16px}
+    .card{
+      border:1px solid var(--border); background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border-radius:16px; overflow:hidden;
+    }
+    .cardhead{
+      padding:16px 16px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+      background:rgba(255,255,255,.02); border-bottom:1px solid var(--border);
+    }
+    .controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    label{font-size:12px; color:var(--muted)}
+    input, select{
+      background:rgba(255,255,255,.04); color:var(--text); border:1px solid var(--border);
+      border-radius:10px; padding:10px 12px; outline:none;
+    }
+    input{min-width:210px}
+    button{
+      background:rgba(96,165,250,.15); color:var(--text); border:1px solid rgba(96,165,250,.35);
+      border-radius:10px; padding:10px 12px; cursor:pointer;
+    }
+    button:hover{background:rgba(96,165,250,.22)}
+    .small{font-size:12px; color:var(--muted)}
+    .content{padding:16px}
+    .status{
+      padding:10px 12px; border:1px dashed var(--border); border-radius:12px;
+      color:var(--muted); background:rgba(255,255,255,.02)
+    }
+    .daygroup{margin-top:14px}
+    .daytitle{font-size:13px; color:var(--muted); margin:18px 0 10px}
+    .event{
+      display:grid; grid-template-columns: 1.3fr 1fr 1fr; gap:12px;
+      padding:12px; border:1px solid var(--border); border-radius:14px;
+      background:rgba(15,23,42,.55); margin-bottom:10px;
+    }
+    .event h3{margin:0 0 6px; font-size:16px}
+    .meta{font-size:12px; color:var(--muted); line-height:1.35}
+    .badges{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+    .badge{
+      font-size:11px; padding:4px 8px; border-radius:999px; border:1px solid var(--border);
+      background:rgba(255,255,255,.03); color:var(--muted)
+    }
+    .badge.good{border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.12); color:rgba(167,243,208,.95)}
+    .badge.warn{border-color:rgba(251,191,36,.35); background:rgba(251,191,36,.12); color:rgba(253,230,138,.95)}
+    .links{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center}
+    .link{
+      font-size:12px; color:var(--text); text-decoration:none;
+      border:1px solid var(--border); padding:8px 10px; border-radius:10px;
+      background:rgba(255,255,255,.03);
+    }
+    .link:hover{border-color:rgba(255,255,255,.2)}
+    .note{margin-top:10px; color:var(--muted); font-size:12px}
+    footer{max-width:1100px; margin:18px auto 50px; padding:0 20px; color:var(--muted); font-size:12px; line-height:1.5}
+    @media (max-width: 860px){
+      .event{grid-template-columns: 1fr; }
+      .links{justify-content:flex-start}
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div>
+    <h1>Watchlist</h1>
+    <div class="sub">
+      Theater releases I’m excited about — with local showtimes when available. Updated automatically.
+    </div>
+    <div class="pillrow">
+      <span class="pill">Prefers: 3D / IMAX / IMAX 3D</span>
+      <span class="pill">Preferred theater: Smitty’s (Sanford)</span>
+      <span class="pill">Chronological list view</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="card" id="watchlistCard">
+    <div class="cardhead">
+      <div>
+        <strong>Calendar view</strong><div class="small">Sorted by next available showtime (or theatrical release date).</div>
+      </div>
+      <div class="controls">
+        <div>
+          <label for="zip">ZIP (used to find nearby theaters)</label><br/>
+          <input id="zip" value="04002" />
+        </div>
+        <div>
+          <label for="radius">Max distance</label><br/>
+          <select id="radius">
+            <option value="25">25 miles</option>
+            <option value="40" selected>40 miles</option>
+            <option value="60">60 miles</option>
+          </select>
+        </div>
+        <button id="refresh">Refresh</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="status" id="status">Ready. Click “Refresh” to load releases + showtimes.</div>
+      <div id="results"></div>
+
+      <div class="note">
+        Tip: keep this page “easy to update” by only editing the titles below.
+      </div>
+
+      <!-- ✅ EDIT ONLY THIS LIST (titles) -->
+      <ol id="movieTitles" style="margin-top:12px; color: var(--muted);">
+        <li data-title="THE SPONGEBOB MOVIE: SEARCH FOR SQUAREPANTS"></li>
+        <li data-title="ZOOTOPIA 2"></li>
+        <li data-title="MERCY"></li>
+        <li data-title="IRON LUNG"></li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer>
+  This page uses a serverless proxy for showtime data so API keys aren’t exposed in client-side JavaScript.
+  If a film has no local showtimes yet, it will show its theatrical release date and offer quick ticket/search links.
+</footer>
+
+<script>
+  // ---------- Minimal config (change rarely) ----------
+  const PREFERRED_THEATER_HINTS = [
+    { nameIncludes: "Smitty", cityIncludes: "Sanford", weight: 50 }, // strong preference
+  ];
+  const PREMIUM_FORMATS = new Set(["3D","IMAX","IMAX3D","3DIMAX"]);
+  const DAYS_AHEAD_TO_CHECK = 14; // showtimes window
+  const API_BASE = "/api/movieglu"; // Netlify/Vercel/Cloudflare function route below
+
+  // ---------- Helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const fmtDate = (d) => d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric", year:"numeric" });
+  const isoDate = (d) => d.toISOString().slice(0,10);
+  const addDays = (d, n) => new Date(d.getTime() + n*86400000);
+
+  function scoreCinema(cinemaName = "", cinemaCity = "", versionType = "") {
+    let score = 0;
+    for (const rule of PREFERRED_THEATER_HINTS) {
+      if (cinemaName.toLowerCase().includes(rule.nameIncludes.toLowerCase()) &&
+          cinemaCity.toLowerCase().includes(rule.cityIncludes.toLowerCase())) {
+        score += rule.weight;
+      }
+    }
+    if (PREMIUM_FORMATS.has(String(versionType).toUpperCase())) score += 15;
+    return score;
+  }
+
+  function ticketLinks(title, zip) {
+    const q = encodeURIComponent(`${title} showtimes ${zip}`);
+    return [
+      { label: "Search showtimes", href: `https://www.google.com/search?q=${q}` },
+      { label: "Fandango", href: `https://www.fandango.com/${encodeURIComponent(zip)}_movietimes?search=${encodeURIComponent(title)}` },
+      { label: "IMDb showtimes", href: `https://www.imdb.com/showtimes/?ref_=nv_mv_sh` }
+    ];
+  }
+
+  async function geocodeZip(zip) {
+    // Free geocoding via OpenStreetMap Nominatim (public endpoint).
+    // If you prefer privacy: replace this with hard-coded lat/lng, or geocode once and store it.
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=US&postalcode=${encodeURIComponent(zip)}`;
+    const res = await fetch(url, { headers: { "Accept":"application/json" } });
+    const data = await res.json();
+    if (!data?.[0]) throw new Error("Could not geocode ZIP. Try a nearby ZIP.");
+    return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
+  }
+
+  async function api(path, params, geo) {
+    const u = new URL(API_BASE, location.origin);
+    u.searchParams.set("path", path);
+    Object.entries(params || {}).forEach(([k,v]) => u.searchParams.set(k, v));
+    if (geo) {
+      u.searchParams.set("lat", String(geo.lat));
+      u.searchParams.set("lng", String(geo.lng));
+    }
+    const res = await fetch(u.toString(), { headers: { "Accept":"application/json" } });
+    const txt = await res.text();
+    let json;
+    try { json = JSON.parse(txt); } catch { throw new Error("Bad API response."); }
+    if (!res.ok) throw new Error(json?.error || "API error");
+    return json;
+  }
+
+  async function findBestFilmMatch(title, geo) {
+    // MovieGlu: filmLiveSearch returns matching films + release dates.  [oai_citation:2‡MovieAPI](https://developer.movieglu.com/v2/api-index/filmlivesearch/?utm_source=chatgpt.com)
+    const out = await api("filmLiveSearch", { query: title }, geo);
+    const films = out?.films || [];
+    if (!films.length) return null;
+
+    // Prefer exact-ish match, then most showtimes, then earliest release date.
+    const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+    const t = norm(title);
+    films.sort((a,b)=>{
+      const aExact = norm(a.film_name) === t ? 1 : 0;
+      const bExact = norm(b.film_name) === t ? 1 : 0;
+      if (aExact !== bExact) return bExact - aExact;
+      const aTimes = Number(a.timescount||0), bTimes = Number(b.timescount||0);
+      if (aTimes !== bTimes) return bTimes - aTimes;
+      const aDate = (a.release_dates?.[0]?.release_date || "9999-12-31");
+      const bDate = (b.release_dates?.[0]?.release_date || "9999-12-31");
+      return aDate.localeCompare(bDate);
+    });
+    return films[0];
+  }
+
+  async function getShowtimesForFilm(filmId, geo) {
+    // MovieGlu: filmShowTimes (film + geolocation + date; within ~75 miles).  [oai_citation:3‡MovieAPI](https://developer.movieglu.com/)
+    const now = new Date();
+    const checks = [];
+    for (let i=0;i<DAYS_AHEAD_TO_CHECK;i++){
+      checks.push(isoDate(addDays(now, i)));
+    }
+    const all = [];
+    for (const day of checks){
+      const out = await api("filmShowTimes", { film_id: String(filmId), date: day }, geo);
+      const cinemas = out?.cinemas || [];
+      for (const c of cinemas){
+        const cinemaName = c.cinema_name || "";
+        const cinemaCity = c.city || c.county || "";
+        const distance = Number(c.distance || 999);
+
+        const showings = c.showings || {};
+        for (const [formatKey, payload] of Object.entries(showings)){
+          const times = payload?.times || [];
+          for (const t of times){
+            all.push({
+              date: day,
+              start_time: t.start_time,
+              cinema_name: cinemaName,
+              cinema_city: cinemaCity,
+              distance,
+              format: formatKey,
+              score: scoreCinema(cinemaName, cinemaCity, formatKey),
+            });
+          }
+        }
+      }
+    }
+    return all;
+  }
+
+  function renderCalendar(items, zip) {
+    const results = $("results");
+    results.innerHTML = "";
+    if (!items.length) {
+      results.innerHTML = `<div class="status">No upcoming showtimes found in the next ${DAYS_AHEAD_TO_CHECK} days. You’ll still see release dates and ticket links.</div>`;
+      return;
+    }
+
+    // Group by day
+    const byDay = new Map();
+    for (const it of items){
+      if (!byDay.has(it.dayKey)) byDay.set(it.dayKey, []);
+      byDay.get(it.dayKey).push(it);
+    }
+
+    for (const [dayKey, dayItems] of byDay.entries()){
+      const d = new Date(dayKey + "T00:00:00");
+      const wrap = document.createElement("div");
+      wrap.className = "daygroup";
+      wrap.innerHTML = `<div class="daytitle">${fmtDate(d)}</div>`;
+
+      dayItems.sort((a,b)=>{
+        if (a.when !== b.when) return a.when - b.when;
+        if (a.score !== b.score) return b.score - a.score;
+        return a.distance - b.distance;
+      });
+
+      for (const ev of dayItems){
+        const el = document.createElement("div");
+        el.className = "event";
+
+        const premium = PREMIUM_FORMATS.has(String(ev.format).toUpperCase());
+        const isPreferred = (ev.cinema_name || "").toLowerCase().includes("smitty") && (ev.cinema_city || "").toLowerCase().includes("sanford");
+
+        const badges = [
+          premium ? `<span class="badge good">${ev.format}</span>` : `<span class="badge">${ev.format}</span>`,
+          isPreferred ? `<span class="badge good">Preferred theater</span>` : ``,
+          ev.distance != null ? `<span class="badge">${ev.distance.toFixed(1)} mi</span>` : ``,
+          ev.kind === "release" ? `<span class="badge warn">Release date</span>` : ``,
+        ].filter(Boolean).join("");
+
+        const links = ticketLinks(ev.title, zip).map(l => `<a class="link" target="_blank" rel="noreferrer" href="${l.href}">${l.label}</a>`).join("");
+
+        el.innerHTML = `
+          <div>
+            <h3>${ev.title}</h3>
+            <div class="meta">
+              ${ev.kind === "showtime"
+                ? `<strong>${ev.start_time}</strong> • ${ev.cinema_name}${ev.cinema_city ? ` — ${ev.cinema_city}` : ""}`
+                : `<strong>In theaters</strong> • ${ev.releaseDate ? ev.releaseDate : "date unknown"}`
+              }
+            </div>
+            <div class="badges">${badges}</div>
+          </div>
+          <div class="meta">
+            <div><strong>Why this is here</strong></div>
+            <div>${ev.kind === "showtime"
+              ? `Sorted to favor premium formats and your preferred theater, then earliest time.`
+              : `Showtimes aren’t available yet—this will auto-fill when theaters publish schedules.`
+            }</div>
+          </div>
+          <div class="links">${links}</div>
+        `;
+        wrap.appendChild(el);
+      }
+
+      results.appendChild(wrap);
+    }
+  }
+
+  async function refresh() {
+    const zip = $("zip").value.trim();
+    const radius = Number($("radius").value);
+    const status = $("status");
+    status.textContent = "Loading… (releases + showtimes)";
+
+    try {
+      const geo = await geocodeZip(zip);
+
+      // Get titles (the only thing you maintain)
+      const titles = [...document.querySelectorAll("#movieTitles li")]
+        .map(li => li.getAttribute("data-title"))
+        .filter(Boolean);
+
+      const events = [];
+      for (const title of titles) {
+        status.textContent = `Looking up: ${title}`;
+        const film = await findBestFilmMatch(title, geo);
+
+        if (!film) {
+          // No match: show ticket links only (as a “release unknown” placeholder)
+          events.push({
+            kind:"release",
+            title,
+            dayKey: isoDate(new Date()),
+            when: Date.now() + 10_000_000,
+            releaseDate: "Unknown",
+            format:"Standard",
+            distance:null,
+            cinema_name:"",
+            cinema_city:"",
+            score:0
+          });
+          continue;
+        }
+
+        const release = film.release_dates?.[0]?.release_date || null;
+
+        // Pull showtimes window
+        status.textContent = `Showtimes check: ${film.film_name}`;
+        let showtimes = [];
+        try {
+          showtimes = await getShowtimesForFilm(film.film_id, geo);
+        } catch (e) {
+          // If evaluation quota is hit or showtimes fail, still render release date
+          showtimes = [];
+        }
+
+        // Filter by distance
+        showtimes = showtimes.filter(s => Number(s.distance || 999) <= radius);
+
+        if (showtimes.length) {
+          for (const s of showtimes) {
+            const when = new Date(`${s.date}T${s.start_time}:00`).getTime();
+            events.push({
+              kind:"showtime",
+              title,
+              dayKey: s.date,
+              when,
+              start_time: s.start_time,
+              cinema_name: s.cinema_name,
+              cinema_city: s.cinema_city,
+              distance: s.distance,
+              format: s.format,
+              score: s.score,
+              releaseDate: release
+            });
+          }
+        } else {
+          // Fallback: release date (so it still sorts nicely)
+          const dayKey = release || isoDate(addDays(new Date(), 365)); // unknown -> far future
+          const when = new Date(`${dayKey}T12:00:00`).getTime();
+          events.push({
+            kind:"release",
+            title,
+            dayKey,
+            when,
+            releaseDate: release || "Unknown",
+            format:"Standard",
+            distance:null,
+            cinema_name:"",
+            cinema_city:"",
+            score:0
+          });
+        }
+      }
+
+      // Sort chronologically, then preference score
+      events.sort((a,b)=>{
+        if (a.when !== b.when) return a.when - b.when;
+        return (b.score||0) - (a.score||0);
+      });
+
+      status.textContent = "Done.";
+      renderCalendar(events, zip);
+
+    } catch (err) {
+      status.textContent = `Error: ${err.message || err}`;
+      $("results").innerHTML = "";
+    }
+  }
+
+  $("refresh").addEventListener("click", refresh);
+</script>
+</body>
 </html>
